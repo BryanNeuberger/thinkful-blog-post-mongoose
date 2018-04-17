@@ -101,10 +101,11 @@ describe('Blog Posts', function() {
         .send(updatePost);
     })
     .then(function(res) {
-      expect(res).to.have.status(204);
-      // expect(res).to.be.json;
+
+      expect(res).to.have.status(200);
+      expect(res).to.be.json;
       expect(res.body).to.be.a('object');
-      // expect(res.body).to.deep.equal(updatePost);
+      expect(res.body).to.deep.equal(updatePost);
     })
   });
 
