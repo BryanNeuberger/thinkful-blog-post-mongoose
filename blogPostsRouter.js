@@ -9,17 +9,33 @@ const jsonParser = bodyParser.json();
 
 const {BlogPosts} = require('./models');
 
-BlogPosts.create('title1', 'content1', 'author1', Date(Date.now()));
-BlogPosts.create('title2', 'content2', 'author2', Date(Date.now()));
-BlogPosts.create('title3', 'content3', 'author3', Date(Date.now()));
-BlogPosts.create('title4', 'content4', 'author4', Date(Date.now()));
+const mongoose = require('mongoose');
+
+// Mongoose internally uses a promise-like object,
+// but its better to make Mongoose use built in es6 promises
+mongoose.Promise = global.Promise;
+
 
 router.get('/', (req, res) => {
-  res.json(BlogPosts.get());
+
+  BlogPosts
+  .find()
+  .limit(25)
+  .then(blogPosts => {
+      res.json({
+        serializedBlogPostsArray: blogPosts.map(
+          (blogPosts) => blogPosts.serialize())
+      })
+    })
+  .catch(err => {
+      console.error(err);
+      res.status(500).json({ message: 'Internal server error' });
+    });
 });
 
 router.post('/', jsonParser, (req, res) => {
-  const requiredFields = ['title', 'content', 'author', 'publishDate'];
+
+  const requiredFields = ['title', 'content', 'author'];
   for (let i = 0; i < requiredFields.length; i++) {
     const field = requiredFields[i];
     if (!(field in req.body)) {
@@ -28,43 +44,40 @@ router.post('/', jsonParser, (req, res) => {
       return res.status(400).send(message);
     }
   }
-  const item = BlogPosts.create(req.body.title, req.body.content, req.body.author, req.body.publishDate);
-  res.status(201).json(item);
+  BlogPosts.create({
+    title: req.body.title,
+    content: req.body.content,
+    author: req.body.author
+  })
+  .then(post => res.status(201).json(post.serialize()))
+  .catch(err => {
+    console.error(err);
+    res.status(500).json({message: 'Internal server error'});
+  });
 });
 
 router.delete('/:id', (req, res) => {
-  BlogPosts.delete(req.params.id);
-  console.log(`Deleted blog list item \`${req.params.id}\``);
-  res.status(204).end();
+
+  BlogPosts.findByIdAndRemove(req.params.id)
+    .then(() => res.status(204).end())
+    .catch(err => res.status(500).json({message: 'Internal server error'}));
 });
 
 router.put('/:id', jsonParser, (req, res) => {
-  const requiredFields = ['title', 'content', 'author', 'publishDate'];
-  for (let i = 0; i < requiredFields.length; i++) {
-    const field = requiredFields[i];
-    if (!(field in req.body)) {
-      const message = `Missing \`${field}\` in request body`
-      console.error(message);
-      return res.status(400).send(message);
+
+  const toUpdate = {};
+  const updateableFields = ['title', 'content', 'author'];
+
+  updateableFields.forEach(field => {
+    if (field in req.body) {
+      toUpdate[field] = req.body[field];
     }
-  }
-  if (req.params.id !== req.body.id) {
-    const message = (
-      `Request path id (${req.params.id}) and request body id `
-      `(${req.body.id}) must match`);
-    console.error(message);
-    return res.status(400).send(message);
-  }
-  console.log(`Updating blog list item \`${req.params.id}\``);
-  console.log(`req body = ${req.body}`);
-  const item = BlogPosts.update({
-    id: req.params.id,
-    title: req.body.title,
-    content: req.body.content,
-    author: req.body.author,
-    publishDate: req.body.publishDate
-  })
-  res.status(200).json(item);
+  });
+
+  BlogPosts.findByIdAndUpdate(req.params.id, {$set: toUpdate})
+  .then(post => res.status(204).end())
+  .catch(err => res.status(500).json({message: 'Internal server error'}));
+
 });
 
 module.exports = router;
